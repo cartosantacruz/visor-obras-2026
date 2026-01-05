@@ -1,46 +1,48 @@
 /**
- * LÓGICA DEL MAPA DE OBRAS - SANTA CRUZ
- * Funcionalidad: Carga de datos, filtrado múltiple y ajuste de cámara automático.
+ * LÓGICA DEL VISOR DE OBRAS 2026
+ * Datos cargados desde GitHub GeoJSON externo.
  */
 
-// 1. DATOS DE LAS OBRAS (Aquí pegarías el contenido de tu archivo GeoJSON)
-const obrasGeoJSON = {
-    "type": "FeatureCollection",
-    "features": [
-        {"type": "Feature", "properties": {"id":1,"localidad":"28 de Noviembre","nombre":"ESCUELA EIPE","tipo":"Educación","organismo":"IDUV"}, "geometry": {"type":"Point","coordinates":[-72.20958742841874,-51.5896707658149]}},
-        {"type": "Feature", "properties": {"id":3,"localidad":"Caleta Olivia","nombre":"Planta de tratamientos","tipo":"Infraestructura/Servicios","organismo":"SPSE"}, "geometry": {"type":"Point","coordinates":[-67.54230877043062,-46.43658939441054]}},
-        {"type": "Feature", "properties": {"id":46,"localidad":"Río Gallegos","nombre":"Sala inmersiva","tipo":"Otros","organismo":"IDUV"}, "geometry": {"type":"Point","coordinates":[-69.22054480268227,-51.62716008344622]}}
-        // ... (resto de tus datos)
-    ]
-};
+// 1. URL del archivo de datos
+const GEOJSON_URL = "https://raw.githubusercontent.com/cartosantacruz/visor-obras-2026/refs/heads/main/obras.geojson";
 
 let map;
 let markersLayer;
+let obrasData = null; // Aquí guardaremos los datos una vez descargados
 const vistaInicial = { centro: [-48.5, -69.0], zoom: 6 };
 
-// 2. INICIALIZAR EL MAPA
-function initMap() {
-    // Crear mapa centrado en Santa Cruz
+// 2. INICIALIZAR EL MAPA Y CARGAR DATOS
+function init() {
+    // Configurar el mapa base
     map = L.map('map').setView(vistaInicial.centro, vistaInicial.zoom);
-
-    // Agregar capa de mapa (OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Capa para agrupar marcadores (permite borrarlos fácilmente)
     markersLayer = L.featureGroup().addTo(map);
 
-    // Llenar selectores y mostrar obras iniciales
-    populateFilters();
-    updateMap(obrasGeoJSON.features);
+    // LLAMADA AL ARCHIVO EXTERNO
+    fetch(GEOJSON_URL)
+        .then(response => {
+            if (!response.ok) throw new Error("No se pudo cargar el archivo");
+            return response.json();
+        })
+        .then(data => {
+            obrasData = data; // Guardamos los datos globalmente
+            populateFilters(); // Llenamos los filtros con los datos nuevos
+            updateMap(obrasData.features); // Dibujamos las obras
+        })
+        .catch(error => {
+            console.error("Error cargando GeoJSON:", error);
+            alert("Error al cargar los datos de obras.");
+        });
 }
 
-// 3. LLENAR FILTROS AUTOMÁTICAMENTE
+// 3. LLENAR FILTROS DESDE EL JSON CARGADO
 function populateFilters() {
-    const features = obrasGeoJSON.features;
+    const features = obrasData.features;
 
-    // Extraer valores únicos sin duplicados
+    // Extraer valores únicos para cada categoría
     const localidades = [...new Set(features.map(f => f.properties.localidad))].sort();
     const organismos = [...new Set(features.map(f => f.properties.organismo))].sort();
     const tipos = [...new Set(features.map(f => f.properties.tipo))].sort();
@@ -62,14 +64,16 @@ function fillSelect(id, values) {
     });
 }
 
-// 4. LÓGICA DE FILTRADO COMBINADO
+// 4. LÓGICA DE FILTRADO
 function applyFilters() {
+    if (!obrasData) return; // Si los datos no han cargado, no hacer nada
+
     const valLoc = document.getElementById('filter-localidad').value;
     const valOrg = document.getElementById('filter-organismo').value;
     const valTipo = document.getElementById('filter-tipo').value;
     const valSearch = document.getElementById('search-nombre').value.toLowerCase();
 
-    const filtered = obrasGeoJSON.features.filter(f => {
+    const filtered = obrasData.features.filter(f => {
         const p = f.properties;
         const matchLoc = (valLoc === "Todas" || p.localidad === valLoc);
         const matchOrg = (valOrg === "Todos" || p.organismo === valOrg);
@@ -82,58 +86,58 @@ function applyFilters() {
     updateMap(filtered);
 }
 
-// 5. ACTUALIZAR MAPA Y AJUSTAR CÁMARA (FIT BOUNDS)
+// 5. RENDERIZAR MARCADORES Y AUTO-ZOOM
 function updateMap(featuresToShow) {
-    markersLayer.clearLayers(); // Limpiar marcadores anteriores
+    markersLayer.clearLayers();
 
     if (featuresToShow.length === 0) {
-        // Si no hay resultados, volver a la vista general
         map.flyTo(vistaInicial.centro, vistaInicial.zoom);
         return;
     }
 
     featuresToShow.forEach(f => {
-        const coords = f.geometry.coordinates;
-        // Leaflet usa [Lat, Lng] pero GeoJSON usa [Lng, Lat]
+        // Manejo de coordenadas: algunos GeoJSON usan MultiPoint
+        const coords = f.geometry.type === 'MultiPoint' 
+            ? f.geometry.coordinates[0] 
+            : f.geometry.coordinates;
+
         const marker = L.marker([coords[1], coords[0]]);
         
-        // Estilo del Popup
         marker.bindPopup(`
-            <div style="color: #2c3e50;">
-                <h3 style="margin:0 0 5px 0;">${f.properties.nombre}</h3>
+            <div style="min-width: 200px;">
+                <h3 style="color:#2c3e50; margin-bottom:5px;">${f.properties.nombre}</h3>
+                <hr>
                 <p><b>Localidad:</b> ${f.properties.localidad}</p>
-                <p><b>Tipo:</b> ${f.properties.tipo}</p>
-                <p><b>Estado:</b> ${f.properties.estado || 'Proyectada'}</p>
+                <p><b>Organismo:</b> ${f.properties.organismo}</p>
+                <p><b>Estado:</b> ${f.properties.estado}</p>
             </div>
         `);
         
         markersLayer.addLayer(marker);
     });
 
-    // --- MEJORA: AJUSTE DE CÁMARA ---
-    // Calculamos el recuadro (bounds) que contiene a todos los nuevos marcadores
+    // Ajuste de cámara automático
     const bounds = markersLayer.getBounds();
-    
-    // Si hay más de un marcador, encuadramos todos. Si es uno, hacemos zoom en él.
     if (featuresToShow.length > 1) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+        map.fitBounds(bounds, { padding: [50, 50] });
     } else {
-        const singleCoords = featuresToShow[0].geometry.coordinates;
-        map.flyTo([singleCoords[1], singleCoords[0]], 14);
+        const lastCoords = featuresToShow[0].geometry.type === 'MultiPoint' 
+            ? featuresToShow[0].geometry.coordinates[0] 
+            : featuresToShow[0].geometry.coordinates;
+        map.flyTo([lastCoords[1], lastCoords[0]], 15);
     }
 }
 
 // 6. EVENTOS
 document.querySelectorAll('select').forEach(s => s.addEventListener('change', applyFilters));
 document.getElementById('search-nombre').addEventListener('input', applyFilters);
-
 document.getElementById('btn-limpiar').addEventListener('click', () => {
     document.getElementById('filter-localidad').value = "Todas";
     document.getElementById('filter-organismo').value = "Todos";
     document.getElementById('filter-tipo').value = "Todos";
     document.getElementById('search-nombre').value = "";
-    updateMap(obrasGeoJSON.features);
+    updateMap(obrasData.features);
 });
 
-// Iniciar al cargar la ventana
-window.onload = initMap;
+// Arrancar aplicación
+window.onload = init;
