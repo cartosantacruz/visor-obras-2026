@@ -1,0 +1,81 @@
+/* Reset básico para que ocupe toda la pantalla */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.dashboard-container {
+    display: flex;
+    height: 100vh; /* Ocupa el 100% de la altura de la ventana */
+    width: 100vw;
+}
+
+/* Estilos del Panel Lateral */
+.sidebar {
+    width: 320px;
+    background-color: #2c3e50; /* Azul oscuro profesional */
+    color: #ecf0f1;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+    z-index: 1000; /* Asegura que esté sobre el mapa */
+}
+
+.sidebar-title {
+    font-size: 1.5rem;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+/* Estilos de los grupos de filtros */
+.filter-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: #bdc3c7;
+}
+
+.filter-group select, 
+.filter-group input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #34495e;
+    background-color: #34495e;
+    color: white;
+    outline: none;
+}
+
+.filter-group select:focus, 
+.filter-group input:focus {
+    border-color: #3498db;
+}
+
+/* Botón de limpiar */
+.btn-secondary {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.3s;
+    margin-top: auto; /* Empuja el botón al final del panel */
+}
+
+.btn-secondary:hover {
+    background-color: #2980b9;
+}
+
+/* Estilos del Mapa */
+#map {
+    flex-grow: 1; /* El mapa ocupa todo el espacio restante */
+    background-color: #e5e3df;
+}
